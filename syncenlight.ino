@@ -34,11 +34,10 @@ unsigned int brightness = 255; // 0-255
 
 //---------------------------------------------------------
 bool shouldSaveConfig = false;
-void saveConfigCallback () {
+void save_config_callback () {
   Serial.println("Should save config");
   shouldSaveConfig = true;
 }
-
 
 WiFiManager wifiManager;
 WiFiClient wifiClient;
@@ -49,47 +48,34 @@ Adafruit_NeoPixel leds = Adafruit_NeoPixel(2, PIXEL_PIN, NEO_GRB + NEO_KHZ800); 
 uint16_t hue = 0; // 0-359
 extern const uint8_t gamma8[];
 
-bool buttonState;
-bool lastButtonState;
-
 Ticker swooshTicker;
 unsigned int swoowshTime;
-uint32_t blinkColor;
-
+uint16_t swooshHue = 240; // blue swoosh
 
 String chipId = String(ESP.getChipId(), HEX);
-char chip_id_char_arr[7];
-
-
+char chipIdCharArr[7];
 
 void setup() {
-  Serial.begin(115200);
-  delay(1000);
-  Serial.println(".");
-  Serial.println(".");
+  // Initialize debug output
+  Serial.begin(9600);
   
-  pinMode(BUTTON_PIN, INPUT_PULLUP);
-
-  swooshTime = 0;
-  
+  // Initialize LEDs and swoosh animation (played during startup and configuration)
   leds.begin();
   leds.setBrightness(brightness);
-  blinkColor = leds.Color(10, 10, 10);
+  swooshTime = 0;
   swooshTicker.attach_ms(10, update_swoosh);
   
+  // Read out chip ID and construct SSID for hotspot
   chipId.toUpperCase();
-  chipId.toCharArray(chip_id_char_arr, 7);
+  chipId.toCharArray(chipIdCharArr, 7);
   String ssid = "SYNCENLIGHT-" + chipId;
-  int ssid_char_arr_size = ssid.length() + 1;
-  char ssid_char_arr[ssid_char_arr_size];
-  ssid.toCharArray(ssid_char_arr, ssid_char_arr_size);
+  int ssidCharArrSize = ssid.length() + 1;
+  char ssidCharArr[ssidCharArrSize];
+  ssid.toCharArray(ssidCharArr, ssidCharArrSize);
 
   Serial.println("Hi!");
-  Serial.print("Version: Syncenlight ");
-  Serial.println(VERSION);
   Serial.print("Chip ID: ");
   Serial.println(chipId);
-
 
   // Read configuration from FS json.
   Serial.println("Mounting FS ...");
@@ -134,27 +120,17 @@ void setup() {
   WiFiManagerParameter customMqttPassword("Password", "MQTT Password", mqttPassword, 40);
   
   
-  wifiManager.setSaveConfigCallback(saveConfigCallback);
+  wifiManager.setSaveConfigCallback(save_config_callback);
   // Add all parameters.
   wifiManager.addParameter(&customMqttServer);
   wifiManager.addParameter(&customMqttPort);
   wifiManager.addParameter(&customMqttUser);
   wifiManager.addParameter(&customMqttPassword);
 
-
-  // When button is pressed on start, go into config portal.
-  if (digitalRead(BUTTON_PIN) == LOW) {
-    blinkTicker.attach(0.1, blinkLed);
-    wifiManager.startConfigPortal(ssid_char_arr);
-    blinkTicker.attach(1, blinkLed);
-  }
-  else {
-    wifiManager.autoConnect(ssid_char_arr);    
-  }
+  wifiManager.autoConnect(ssidCharArr);
 
   // We are connected.
   Serial.println("WiFi Connected.");
-
 
   // Read updated parameters.
   strcpy(mqttServer, customMqttServer.getValue());
@@ -180,7 +156,6 @@ void setup() {
     configFile.close();
   }
   // End save.
- 
 
   // Start MQTT client.
   String s = String((char*)mqttPort);
@@ -188,6 +163,8 @@ void setup() {
   mqttClient.setServer(mqttServer, p);
   mqttClient.setCallback(mqtt_callback);
   Serial.println("MQTT client started.");
+  
+  swooshTicker.detach();
 }
 
 
@@ -260,26 +237,25 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
   Serial.print(")");
   Serial.println();
 
-  // Update
+  // Update color of LEDs
   if (length <= 3) {
     payload[length] = '\0';
     String s = String((char*)payload);
     unsigned int newHue = s.toInt();
     if (newHue >= 0 && newHue < 360) {
       hue = newHue;
-      updateLed();
+      update_led();
     }
   }
 }
 
-
 void mqtt_reconnect() {
   while (!mqttClient.connected()) {
     Serial.println("Connecting MQTT...");
-    if (mqttClient.connect(chip_id_char_arr)) {
+    if (mqttClient.connect(chipIdCharArr, mqttUser, mqttPassword)) {
       swooshTicker.detach();
       Serial.println("MQTT connected.");
-      mqttClient.subscribe(publish_topic, 1); // QoS level 1
+      mqttClient.subscribe("syncenlight", 1); // QoS level 1
     }
     else {
       Serial.print("Error, rc=");
@@ -289,24 +265,20 @@ void mqtt_reconnect() {
   }
 }
 
-
-void updateLed() {
+void update_led() {
   uint32_t color = hsv_to_rgb(hue, 255, 255);
-  for (uint16_t i=0; i<leds.numPixels(); i++) {
+  for (uint16_t i=0; i < PIXEL_COUNT; i++) {
     leds.setPixelColor(i, color);
   }
   leds.show();
 }
 
-
-
-void update_shwoosh() {
+void update_swoosh() {
   swooshTime = swooshTime + 10;
 
   int value = (int) 127.5 * sin(2*3.14/1000 * swooshTime) + 127.5;
   for (int i = 0; i < PIXEL_COUNT; i++) {
-    // hue = 240 is blue
-    leds.setPixelColor(i, hsv_to_rgb(240, 255, value));
+    leds.setPixelColor(i, hsv_to_rgb(swooshHue, 255, value));
   }
   leds.show();
 }
