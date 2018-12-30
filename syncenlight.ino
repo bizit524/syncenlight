@@ -31,6 +31,7 @@ char mqttPassword[40] = "";
 
 unsigned int brightness = 255; // 0-255
 
+bool lastSensorState = false;
 
 //---------------------------------------------------------
 bool shouldSaveConfig = false;
@@ -49,7 +50,7 @@ uint16_t hue = 0; // 0-359
 extern const uint8_t gamma8[];
 
 Ticker swooshTicker;
-unsigned int swoowshTime;
+unsigned int swooshTime;
 uint16_t swooshHue = 240; // blue swoosh
 
 String chipId = String(ESP.getChipId(), HEX);
@@ -159,7 +160,7 @@ void setup() {
 
   // Start MQTT client.
   String s = String((char*)mqttPort);
-  unsigned int p = s.toInt(s);
+  unsigned int p = s.toInt();
   mqttClient.setServer(mqttServer, p);
   mqttClient.setCallback(mqtt_callback);
   Serial.println("MQTT client started.");
@@ -178,7 +179,7 @@ void loop() {
     hue = hue + 1;
     hue = (hue + 1) % 360;
     
-    updateLed();
+    update_led();
     
     char payload[1];
     itoa(hue, payload, 10);
@@ -196,9 +197,9 @@ void loop() {
 
   // For determining first loop after touch is released
   if (sensorValue > SENSOR_THRESHOLD) {
-    last_sensor_state = true;
+    lastSensorState = true;
   } else {
-    last_sensor_state = false;
+    lastSensorState = false;
   }
 
   // If not connected anymore try to reconnect
