@@ -24,8 +24,10 @@
 #define LOOP_PERIOD 50
 
 // Defaults
-char mqtt_server[40] = "netzbasteln.de";
-char publish_topic[40] = "syncenlight";
+char mqttServer[40] = "";
+char mqttPort[40] = "";
+char mqttUser[40] = "";
+char mqttPassword[40] = "";
 
 unsigned int brightness = 255; // 0-255
 
@@ -108,8 +110,10 @@ void setup() {
         json.printTo(Serial);
         if (json.success()) {
           Serial.println("\nParsed json.");
-          strcpy(mqtt_server, json["mqtt_server"]);
-          strcpy(publish_topic, json["publish_topic"]);
+          strcpy(mqttServer, json["mqtt_server"]);
+          strcpy(mqttPort, json["mqtt_port"]);
+          strcpy(mqttUser, json["mqtt_user"]);
+          strcpy(mqttPassword, json["mqtt_password"]);
         } else {
           Serial.println("Failed to load json config.");
         }
@@ -122,13 +126,18 @@ void setup() {
   //end read
 
   // The extra parameters to be configured.
-  WiFiManagerParameter custom_mqtt_server("Server", "mqtt server", mqtt_server, 40);
-  WiFiManagerParameter custom_publish_topic("Channel", "channel", publish_topic, 40);
+  WiFiManagerParameter customMqttServer("Server", "MQTT Server", mqttServer, 40);
+  WiFiManagerParameter customMqttPort("Port", "MQTT Port", mqttPort, 40);
+  WiFiManagerParameter customMqttUser("User", "MQTT User", mqttUser, 40);
+  WiFiManagerParameter customMqttPassword("Password", "MQTT Password", mqttPassword, 40);
+  
   
   wifiManager.setSaveConfigCallback(saveConfigCallback);
   // Add all parameters.
-  wifiManager.addParameter(&custom_mqtt_server);
-  wifiManager.addParameter(&custom_publish_topic);
+  wifiManager.addParameter(&customMqttServer);
+  wifiManager.addParameter(&customMqttPort);
+  wifiManager.addParameter(&customMqttUser);
+  wifiManager.addParameter(&customMqttPassword);
 
 
   // When button is pressed on start, go into config portal.
@@ -146,16 +155,20 @@ void setup() {
 
 
   // Read updated parameters.
-  strcpy(mqtt_server, custom_mqtt_server.getValue());
-  strcpy(publish_topic, custom_publish_topic.getValue());
+  strcpy(mqttServer, customMqttServer.getValue());
+  strcpy(mqttPort, customMqttPort.getValue());
+  strcpy(mqttUser, customMqttUser.getValue());
+  strcpy(mqttPassword, customMqttPassword.getValue());
 
   // Save the custom parameters to FS.
   if (shouldSaveConfig) {
     Serial.println("Saving config.");
     DynamicJsonBuffer jsonBuffer;
     JsonObject& json = jsonBuffer.createObject();
-    json["mqtt_server"] = mqtt_server;
-    json["publish_topic"] = publish_topic;
+    json["mqtt_server"] = mqttServer;
+    json["mqtt_port"] = mqttPort;
+    json["mqtt_user"] = mqttUser;
+    json["mqtt_password"] = mqttPassword;
     File configFile = SPIFFS.open("/config.json", "w");
     if (!configFile) {
       Serial.println("Failed to open config file for writing.");
@@ -168,7 +181,9 @@ void setup() {
  
 
   // Start MQTT client.
-  mqttClient.setServer(mqtt_server, 1883);
+  String s = String((char*)mqttPort);
+  unsigned int p = s.toInt(s);
+  mqttClient.setServer(mqttServer, p);
   mqttClient.setCallback(mqtt_callback);
   Serial.println("MQTT client started.");
 }
