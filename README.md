@@ -8,7 +8,7 @@ Software for two (or more) lamps whose colors can be changed by touch and are sy
 * GND: VSS of WS2812B
 * 5V: VDD of WS2812B
 
-A more detailed instruction on how to build the hardware for this can be found in our Instructable. Of course something similar can be done using other microcontrollers or hardware but then you have to modify the software accordingly :-)
+A more detailed instruction on how to build the hardware for this can be found [in our Instructable](https://www.instructables.com/id/Color-Synchronized-Touch-Lamps/). Of course something similar can be done using other microcontrollers or hardware but then you have to modify the software accordingly :-)
 
 Here is a video of how it looks like:
 
