@@ -52,8 +52,8 @@ extern const uint8_t gamma8[];
 bool buttonState;
 bool lastButtonState;
 
-Ticker blinkTicker;
-bool blinkTickerOn = false;
+Ticker swooshTicker;
+unsigned int swoowshTime;
 uint32_t blinkColor;
 
 
@@ -70,10 +70,12 @@ void setup() {
   
   pinMode(BUTTON_PIN, INPUT_PULLUP);
 
+  swooshTime = 0;
+  
   leds.begin();
   leds.setBrightness(brightness);
   blinkColor = leds.Color(10, 10, 10);
-  blinkTicker.attach(1, blinkLed);
+  swooshTicker.attach_ms(10, update_swoosh);
   
   chipId.toUpperCase();
   chipId.toCharArray(chip_id_char_arr, 7);
@@ -224,7 +226,7 @@ void loop() {
 
   // If not connected anymore try to reconnect
   if (!mqttClient.connected()) {
-    blinkTicker.attach(1, blinkLed);
+    swooshTicker.attach_ms(10, update_swoosh);
     mqtt_reconnect();
   }
 
@@ -275,7 +277,7 @@ void mqtt_reconnect() {
   while (!mqttClient.connected()) {
     Serial.println("Connecting MQTT...");
     if (mqttClient.connect(chip_id_char_arr)) {
-      blinkTicker.detach();
+      swooshTicker.detach();
       Serial.println("MQTT connected.");
       mqttClient.subscribe(publish_topic, 1); // QoS level 1
     }
@@ -289,7 +291,7 @@ void mqtt_reconnect() {
 
 
 void updateLed() {
-  uint32_t color = HSVtoRGB(hue, 255, 255);
+  uint32_t color = hsv_to_rgb(hue, 255, 255);
   for (uint16_t i=0; i<leds.numPixels(); i++) {
     leds.setPixelColor(i, color);
   }
@@ -298,22 +300,20 @@ void updateLed() {
 
 
 
-void blinkLed() {
-  if (blinkTickerOn) {
-    leds.clear(); 
-  }
-  else {
-    for (uint16_t i=0; i<leds.numPixels(); i++) {
-      leds.setPixelColor(i, blinkColor);
-    }
+void update_shwoosh() {
+  swooshTime = swooshTime + 10;
+
+  int value = (int) 127.5 * sin(2*3.14/1000 * swooshTime) + 127.5;
+  for (int i = 0; i < PIXEL_COUNT; i++) {
+    // hue = 240 is blue
+    leds.setPixelColor(i, hsv_to_rgb(240, 255, value));
   }
   leds.show();
-  blinkTickerOn = !blinkTickerOn;
 }
 
 
 // hue: 0-359, sat: 0-255, val (lightness): 0-255
-uint32_t HSVtoRGB(unsigned int hue, unsigned int sat, unsigned int val) {
+uint32_t hsv_to_rgb(unsigned int hue, unsigned int sat, unsigned int val) {
   int r, g, b, base;
   if (sat == 0) {
     r = g = b = val;
