@@ -1,6 +1,4 @@
-// SYNCENLIGHT BY NETZBASTELN
-// ZF18 Workshop version
-#define VERSION "0.6-nb"
+// syncenlight version by tueftla, based on the Netzbasteln version
 
 #include <FS.h>                   // File system, this needs to be first.
 #include <ESP8266WiFi.h>          // ESP8266 Core WiFi Library
@@ -10,18 +8,20 @@
 #include <Adafruit_NeoPixel.h>    // LED
 #include <PubSubClient.h>         // MQTT client
 #include <ArduinoJson.h>          // https://github.com/bblanchon/ArduinoJson
-
+#include <Ticker.h>
+#include <CapacitiveSensor.h>
 
 #include <ESP8266HTTPClient.h>
 #include <ESP8266httpUpdate.h>
 
-#include <Ticker.h>
-
-
 //---------------------------------------------------------
-// Pins
-#define BUTTON_PIN 0 // D3
-#define PIXEL_PIN 4 // D2
+// Pins and configuration
+#define SEND_PIN 4 // D2
+#define RECEIVE_PIN 14 // D5
+#define SENSOR_THRESHOLD 500
+#define PIXEL_PIN 15 // D8
+#define PIXEL_COUNT 4
+#define LOOP_PERIOD 50
 
 // Defaults
 char mqtt_server[40] = "netzbasteln.de";
@@ -41,8 +41,8 @@ void saveConfigCallback () {
 WiFiManager wifiManager;
 WiFiClient wifiClient;
 PubSubClient mqttClient(wifiClient);
-
-Adafruit_NeoPixel leds = Adafruit_NeoPixel(2, PIXEL_PIN, NEO_RGBW + NEO_KHZ800); // NEO_RGBW for Wemos Mini LED Modules, NEO_GRB for most Stripes 
+CapacitiveSensor sensor = CapacitiveSensor(SEND_PIN, RECEIVE_PIN);
+Adafruit_NeoPixel leds = Adafruit_NeoPixel(2, PIXEL_PIN, NEO_GRB + NEO_KHZ800); // NEO_RGBW for Wemos Mini LED Modules, NEO_GRB for most Stripes 
 
 uint16_t hue = 0; // 0-359
 extern const uint8_t gamma8[];
@@ -175,30 +175,59 @@ void setup() {
 
 
 void loop() {
-  // Debounce button
-  buttonState = digitalRead(BUTTON_PIN);
-  if (buttonState == LOW) {
+  long startTime = millis();
+  
+  // Read capacitive sensor, if touched change color
+  long sensorValue;
+  sensorValue = sensor.capacitiveSensor(80);
+  if (sensorValue > SENSOR_THRESHOLD) {
+    hue = hue + 1;
     hue = (hue + 1) % 360;
+    
     updateLed();
-    delay(15);
-  }
-  if (lastButtonState == LOW && buttonState == HIGH) {
-    Serial.print("New Color: ");
-    Serial.print(hue);
-    Serial.println();
-
-    // Send.
+    
     char payload[1];
     itoa(hue, payload, 10);
-    mqttClient.publish(publish_topic, payload, true);
+    mqttClient.publish("synclight", payload, true);
+    
+    Serial.print("New color: ");
+    Serial.println(hue);
+  } else {
+    //if (last_sensor_state == true) {
+    //  char payload[1];
+    //  itoa(hue, payload, 10);
+    //  mqttClient.publish("synclight", payload, true);
+    //}
   }
-  lastButtonState = buttonState;
 
+  // For determining first loop after touch is released
+  if (sensorValue > SENSOR_THRESHOLD) {
+    last_sensor_state = true;
+  } else {
+    last_sensor_state = false;
+  }
+
+  // If not connected anymore try to reconnect
   if (!mqttClient.connected()) {
     blinkTicker.attach(1, blinkLed);
     mqtt_reconnect();
   }
+
+  // Necessary to keep up MQTT connection
   mqttClient.loop();
+  
+  // Debug output
+  Serial.print("Sensor value: ");
+  Serial.print(sensorValue);
+  Serial.print("\t");
+  Serial.print("Processing time in loop: ");
+  Serial.print(millis() - startTime);
+  Serial.print("\n");
+  
+  int delayValue = LOOP_PERIOD - (millis() - startTime);
+  if (delayValue > 0) {
+    delay(delayValue);
+  }
 }
 
 
