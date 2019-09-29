@@ -19,20 +19,20 @@
 #define SEND_PIN 4 // D2
 #define RECEIVE_PIN 14 // D5
 #define SENSOR_THRESHOLD 500
-#define PIXEL_PIN 15 // D8
-#define PIXEL_COUNT 4
+#define PIXEL_PIN 12 // D6
+#define PIXEL_COUNT 16
 #define LOOP_PERIOD 50
 
 // Defaults
-char mqttServer[40] = "";
-char mqttPort[40] = "";
-char mqttUser[40] = "";
-char mqttPassword[40] = "";
+char mqttServer[40] = "farmer.cloudmqtt.com";
+char mqttPort[40] = "16215";
+char mqttUser[40] = "gbzpbcfr";
+char mqttPassword[40] = "FHCs0mYaflrx";
 
 unsigned int brightness = 255; // 0-255
-
+unsigned int timeoutbrightness = 255;
 bool lastSensorState = false;
-
+long addtimer = 0;
 //---------------------------------------------------------
 bool shouldSaveConfig = false;
 void save_config_callback () {
@@ -44,7 +44,7 @@ WiFiManager wifiManager;
 WiFiClient wifiClient;
 PubSubClient mqttClient(wifiClient);
 CapacitiveSensor sensor = CapacitiveSensor(SEND_PIN, RECEIVE_PIN);
-Adafruit_NeoPixel leds = Adafruit_NeoPixel(2, PIXEL_PIN, NEO_GRB + NEO_KHZ800); // NEO_RGBW for Wemos Mini LED Modules, NEO_GRB for most Stripes 
+Adafruit_NeoPixel leds = Adafruit_NeoPixel(PIXEL_COUNT, PIXEL_PIN, NEO_GRB + NEO_KHZ800); // NEO_RGBW for Wemos Mini LED Modules, NEO_GRB for most Stripes 
 
 uint16_t hue = 0; // 0-359
 extern const uint8_t gamma8[];
@@ -175,12 +175,34 @@ void loop() {
   // Read capacitive sensor, if touched change color
   long sensorValue;
   sensorValue = sensor.capacitiveSensor(80);
+ //after 30 minutes start lowering brightness of leds
+  if (addtimer > 1000)
+  {
+    
+    if (timeoutbrightness > 0)
+    {
+      //test 40000
+      //addtimer = 41140;
+      addtimer = 800;
+      timeoutbrightness = timeoutbrightness - 17;
+      leds.setBrightness(timeoutbrightness);
+      Serial.println("timeout brightness: "+timeoutbrightness);
+      //1430 - 1 min
+      Serial.println("30 minutes");
+      update_led();
+    }
+    
+  }
+  addtimer = addtimer + (millis()-startTime);
+  Serial.println(addtimer);
   if (sensorValue > SENSOR_THRESHOLD) {
-    hue = hue + 1;
-    hue = (hue + 1) % 360;
+    hue = hue + 3;
+    hue = (hue + 3) % 360;
     
     update_led();
-    
+    leds.setBrightness(brightness);
+    addtimer = 0;
+    timeoutbrightness = 255;
     char payload[1];
     itoa(hue, payload, 10);
     mqttClient.publish("synclight", payload, true);
@@ -245,6 +267,9 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
     unsigned int newHue = s.toInt();
     if (newHue >= 0 && newHue < 360) {
       hue = newHue;
+      addtimer = 0;
+      timeoutbrightness = 255;
+      leds.setBrightness(brightness);
       update_led();
     }
   }
@@ -256,7 +281,7 @@ void mqtt_reconnect() {
     if (mqttClient.connect(chipIdCharArr, mqttUser, mqttPassword)) {
       swooshTicker.detach();
       Serial.println("MQTT connected.");
-      mqttClient.subscribe("syncenlight", 1); // QoS level 1
+      mqttClient.subscribe("synclight", 1); // QoS level 1
     }
     else {
       Serial.print("Error, rc=");
