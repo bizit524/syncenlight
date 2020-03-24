@@ -196,9 +196,10 @@ void loop() {
   addtimer = addtimer + (millis()-startTime);
   Serial.println(addtimer);
   if (sensorValue > SENSOR_THRESHOLD) {
-    hue = hue + 3;
-    hue = (hue + 3) % 360;
-    
+    //hue = hue + 3;
+    //hue = (hue + 3) % 360;
+    rainbow(15);
+    hue = random(0, 255);
     update_led();
     leds.setBrightness(brightness);
     addtimer = 0;
@@ -359,6 +360,8 @@ uint32_t hsv_to_rgb(unsigned int hue, unsigned int sat, unsigned int val) {
 }
 
 
+
+
 // Gamma correction curve
 // https://learn.adafruit.com/led-tricks-gamma-correction/the-quick-fix
 const uint8_t PROGMEM gamma8[] = {
@@ -379,3 +382,29 @@ const uint8_t PROGMEM gamma8[] = {
   177,180,182,184,186,189,191,193,196,198,200,203,205,208,210,213,
   215,218,220,223,225,228,231,233,236,239,241,244,247,249,252,255
 };
+
+uint32_t Wheel(byte WheelPos) {
+  if(WheelPos < 85) {
+    return leds.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
+  } 
+  else if(WheelPos < 170) {
+    WheelPos -= 85;
+    return leds.Color(255 - WheelPos * 3, 0, WheelPos * 3);
+  } 
+  else {
+    WheelPos -= 170;
+    return leds.Color(0, WheelPos * 3, 255 - WheelPos * 3);
+  }
+}
+
+void rainbow(uint8_t wait) {
+  uint16_t i, j;
+
+  for(j=0; j<256; j++) {
+    for(i=0; i<leds.numPixels(); i++) {
+      leds.setPixelColor(i, Wheel((i*1+j) & 255));
+    }
+    leds.show();
+    delay(wait);
+  }}
+  
